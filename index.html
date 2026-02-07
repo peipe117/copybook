@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="AI 作業簿 - 線上免費書法字帖生成器，支援田字格、米字格、注音與拼音，適合兒童練字與書法練習。">
+    <meta name="keywords" content="字帖, 練字, 書法, 田字格, 注音, 拼音, 學習單, AI生成">
+    <meta property="og:title" content="AI 作業簿 - 書法字帖生成">
+    <meta property="og:description" content="自定義文字內容，一鍵生成精美練字帖。">
+    <meta property="og:image" content="https://cdn-icons-png.flaticon.com/512/2903/2903554.png"> <!-- 替換成您的預覽圖連結 -->
+    
+    <title>AI 作業簿 - 線上字帖生成器</title>
+    
+    <!-- Favicon (簡單的筆圖示) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖌️</text></svg>">
+
+    <!-- Load Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React Dependencies -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* 全域字體設定 */
+        body, input, textarea, button, select { 
+            font-family: "Noto Serif TC", serif; 
+        }
+
+        /* 移除數字輸入框的上下箭頭 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+
+        /* 自定義捲軸 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #fdfbf7; }
+        ::-webkit-scrollbar-thumb { background: #d4c5b0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8d6e63; }
+
+        /* 初始 Loading 動畫樣式 */
+        #initial-loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fdfbf7; z-index: 9999;
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+            transition: opacity 0.5s ease;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #d4c5b0; border-top: 4px solid #8d6e63;
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- 初始載入畫面 (React 載入前顯示) -->
+    <div id="root">
+        <div id="initial-loader">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: #8d6e63; font-weight: bold;">正在準備紙筆...</p>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- Icons (SVG) ---
+        const IconBase = ({ children, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide-icon" {...props}>
+                {children}
+            </svg>
+        );
+
+        const Download = (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>;
+        const Grid3X3 = (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></IconBase>;
+        const Type = (props) => <IconBase {...props}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>;
+        const Settings2 = (props) => <IconBase {...props}><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></IconBase>;
+        const Palette = (props) => <IconBase {...props}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></IconBase>;
+        const Info = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>;
+        const PenTool = (props) => <IconBase {...props}><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></IconBase>;
+
+        // --- Helper: Dynamic Script Loader ---
+        const loadScript = (src) => {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    resolve();
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        };
+
+        const App = () => {
+            // State
+            const [gridType, setGridType] = useState('mi'); 
+            const [gridColor, setGridColor] = useState('red'); 
+            const [phoneticType, setPhoneticType] = useState('none'); 
+            const [rows, setRows] = useState(10);
+            const [cols, setCols] = useState(6);
+            const [isGenerating, setIsGenerating] = useState(false); // New state for loading button
+            const [cellSize, setCellSize] = useState(0); 
+            
+            // Text Input State
+            const [inputText, setInputText] = useState('');
+            const [textMode, setTextMode] = useState('trace'); 
+
+            const printRef = useRef(null);
+
+            // Auto-calculate cell size to fit A4
+            useEffect(() => {
+                const margin = 15; 
+                const safetyBuffer = 2; 
+                const availableWidth = 210 - (margin * 2) - safetyBuffer;
+                const availableHeight = 297 - (margin * 2) - safetyBuffer;
+                
+                let widthRatio = 1;
+                let heightRatio = 1;
+
+                if (phoneticType === 'zhuyin') { widthRatio = 1.35; }
+                else if (phoneticType === 'pinyin') { heightRatio = 1.35; }
+                else if (phoneticType === 'both') { widthRatio = 1.35; heightRatio = 1.35; }
+
+                const maxS_byWidth = availableWidth / (cols * widthRatio);
+                const maxS_byHeight = availableHeight / (rows * heightRatio);
+                
+                setCellSize(Math.max(5, Math.min(maxS_byWidth, maxS_byHeight)));
+            }, [rows, cols, phoneticType]);
+
+            // Color definitions
+            const colors = {
+                red: { stroke: '#d32f2f', name: '朱紅', border: '1px solid #d32f2f', dashed: '1px dashed #d32f2f' },
+                black: { stroke: '#212121', name: '墨黑', border: '1px solid #212121', dashed: '1px dashed #212121' },
+                green: { stroke: '#2e7d32', name: '竹綠', border: '1px solid #2e7d32', dashed: '1px dashed #2e7d32' },
+            };
+
+            // Optimized Export PDF
+            const handleExportPdf = async () => {
+                setIsGenerating(true);
+                
+                try {
+                    // Dynamically load html2pdf only when needed
+                    if (!window.html2pdf) {
+                        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+                    }
+
+                    const element = printRef.current;
+                    const opt = {
+                        margin: 0,
+                        filename: 'AI_作業簿_字帖.pdf',
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { 
+                            scale: 2,
+                            useCORS: true,
+                            logging: false,
+                            scrollY: 0,
+                        },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+
+                    await window.html2pdf().set(opt).from(element).save();
+                } catch (err) {
+                    console.error(err);
+                    alert("PDF 生成失敗，請檢查網路連線或使用 Chrome 瀏覽器重試。");
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            const GridLines = ({ type, color }) => {
+                const dashedStyle = colors[color].dashed;
+                const lineBase = "absolute pointer-events-none";
+
+                const renderInner = () => {
+                    switch (type) {
+                        case 'tian':
+                            return (
+                                <>
+                                <div className={lineBase} style={{ top: 0, bottom: 0, left: '50%', borderLeft: dashedStyle }}></div>
+                                <div className={lineBase} style={{ left: 0, right: 0, top: '50%', borderTop: dashedStyle }}></div>
+                                </>
+                            );
+                        case 'mi':
+                            return (
+                                <>
+                                <div className={lineBase} style={{ top: 0, bottom: 0, left: '50%', borderLeft: dashedStyle }}></div>
+                                <div className={lineBase} style={{ left: 0, right: 0, top: '50%', borderTop: dashedStyle }}></div>
+                                <div className={lineBase} style={{ width: '141.4%', height: '1px', top: '50%', left: '50%', borderTop: dashedStyle, transform: 'translate(-50%, -50%) rotate(45deg)' }}></div>
+                                <div className={lineBase} style={{ width: '141.4%', height: '1px', top: '50%', left: '50%', borderTop: dashedStyle, transform: 'translate(-50%, -50%) rotate(-45deg)' }}></div>
+                                </>
+                            );
+                        case 'huigong':
+                            return <div className={lineBase} style={{ top: '25%', left: '25%', width: '50%', height: '50%', border: dashedStyle }}></div>;
+                        case 'jiugong':
+                            return (
+                                <>
+                                <div className={lineBase} style={{ top: 0, bottom: 0, left: '33.33%', borderLeft: dashedStyle }}></div>
+                                <div className={lineBase} style={{ top: 0, bottom: 0, left: '66.66%', borderLeft: dashedStyle }}></div>
+                                <div className={lineBase} style={{ left: 0, right: 0, top: '33.33%', borderTop: dashedStyle }}></div>
+                                <div className={lineBase} style={{ left: 0, right: 0, top: '66.66%', borderTop: dashedStyle }}></div>
+                                </>
+                            );
+                        default: return null;
+                    }
+                };
+                return <div className="w-full h-full relative overflow-hidden">{renderInner()}</div>;
+            };
+
+            const CellUnit = ({ size, char, mode }) => {
+                let totalWidth = size;
+                let totalHeight = size;
+                const borderStyle = colors[gridColor].border;
+
+                const renderChar = () => {
+                    if (!char || mode === 'none') return null;
+                    const style = {
+                        fontSize: `${size * 0.75}mm`,
+                        lineHeight: `${size}mm`,
+                        color: mode === 'trace' ? 'rgba(0,0,0,0.2)' : 'black',
+                        fontWeight: 'normal',
+                        position: 'absolute', width: '100%', height: '100%',
+                        textAlign: 'center', top: 0, left: 0, zIndex: 10, pointerEvents: 'none',
+                    };
+                    return <span className="font-calligraphy" style={style}>{char}</span>;
+                };
+
+                const GridBox = () => (
+                    <div className="w-full h-full relative">
+                        <GridLines type={gridType} color={gridColor} />
+                        {renderChar()}
+                    </div>
+                );
+
+                if (phoneticType === 'zhuyin') {
+                    const phoneticWidth = size / 3;
+                    totalWidth = size + phoneticWidth;
+                    return (
+                        <div style={{ width: `${totalWidth}mm`, height: `${totalHeight}mm`, display: 'flex', borderRight: borderStyle, borderBottom: borderStyle, boxSizing: 'border-box' }}>
+                            <div style={{ width: `${size}mm`, height: `${size}mm`, borderRight: borderStyle }} className="relative"><GridBox /></div>
+                            <div style={{ width: `${phoneticWidth}mm`, height: `${size}mm` }}></div>
+                        </div>
+                    );
+                }
+                if (phoneticType === 'pinyin') {
+                    const phoneticHeight = size / 3;
+                    totalHeight = size + phoneticHeight;
+                    return (
+                        <div style={{ width: `${totalWidth}mm`, height: `${totalHeight}mm`, display: 'flex', flexDirection: 'column', borderRight: borderStyle, borderBottom: borderStyle, boxSizing: 'border-box' }}>
+                            <div style={{ width: `${size}mm`, height: `${phoneticHeight}mm`, borderBottom: borderStyle, display: 'flex', flexDirection: 'column' }}>
+                                <div className="flex-1 border-b" style={{ borderColor: colors[gridColor].stroke, opacity: 0.3 }}></div>
+                                <div className="flex-1 border-b" style={{ borderColor: colors[gridColor].stroke, opacity: 0.3 }}></div>
+                                <div className="flex-1"></div>
+                            </div>
+                            <div style={{ width: `${size}mm`, height: `${size}mm` }} className="relative"><GridBox /></div>
+                        </div>
+                    );
+                }
+                if (phoneticType === 'both') {
+                    const phoneticHeight = size / 3;
+                    const phoneticWidth = size / 3;
+                    totalWidth = size + phoneticWidth;
+                    totalHeight = size + phoneticHeight;
+                    return (
+                        <div style={{ width: `${totalWidth}mm`, height: `${totalHeight}mm`, display: 'flex', flexDirection: 'column', borderRight: borderStyle, borderBottom: borderStyle, boxSizing: 'border-box' }}>
+                            <div style={{ display: 'flex', width: '100%', height: `${phoneticHeight}mm` }}>
+                                <div style={{ width: `${size}mm`, height: `100%`, borderBottom: borderStyle, borderRight: borderStyle, display: 'flex', flexDirection: 'column' }}>
+                                    <div className="flex-1 border-b" style={{ borderColor: colors[gridColor].stroke, opacity: 0.3 }}></div>
+                                    <div className="flex-1 border-b" style={{ borderColor: colors[gridColor].stroke, opacity: 0.3 }}></div>
+                                    <div className="flex-1"></div>
+                                </div>
+                                <div style={{ width: `${phoneticWidth}mm`, height: `100%`, borderBottom: borderStyle }}></div>
+                            </div>
+                            <div style={{ display: 'flex', width: '100%', height: `${size}mm` }}>
+                                <div style={{ width: `${size}mm`, height: `100%`, borderRight: borderStyle }} className="relative"><GridBox /></div>
+                                <div style={{ width: `${phoneticWidth}mm`, height: `100%` }}></div>
+                            </div>
+                        </div>
+                    );
+                }
+                return <div style={{ width: `${totalWidth}mm`, height: `${totalHeight}mm`, borderRight: borderStyle, borderBottom: borderStyle, boxSizing: 'border-box' }}><GridBox /></div>;
+            };
+
+            return (
+                <div className="flex flex-col md:flex-row h-screen w-full bg-[#fdfbf7] text-[#4a4a4a] overflow-hidden">
+                    <div className="w-full md:w-[340px] flex-shrink-0 flex flex-col border-r border-[#d4c5b0] bg-[#fdfbf7] shadow-xl z-10 overflow-hidden">
+                        <div className="p-5 border-b border-[#d4c5b0] bg-[#f5efe6]">
+                            <h1 className="text-2xl font-bold tracking-widest text-[#5d4037] flex items-center gap-3">
+                                <span className="p-1.5 bg-[#8d6e63] text-white rounded text-base">文</span>
+                                AI 作業簿
+                            </h1>
+                            <p className="text-xs mt-1 text-[#8d6e63]">中華文化底蘊 ・ 書法字帖生成</p>
+                        </div>
+
+                        <div className="flex-1 p-5 overflow-y-auto space-y-6">
+                            <section>
+                                <h2 className="flex items-center gap-2 text-base font-bold text-[#5d4037] mb-3 border-b border-[#e0d6cc] pb-1"><PenTool size={18} /> 內容設定</h2>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#8d6e63] mb-1">輸入練習文字：</label>
+                                        <textarea value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="在此輸入想練習的漢字..." className="w-full h-24 p-2 border border-[#d7ccc8] rounded bg-white text-sm focus:outline-none focus:border-[#8d6e63] resize-none" />
+                                        <div className="text-[10px] text-gray-400 text-right mt-1">支援換行與空格</div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#8d6e63] mb-1">文字顯示模式：</label>
+                                        <div className="flex gap-1 bg-[#f5efe6] p-1 rounded border border-[#d7ccc8]">
+                                            {[{ id: 'none', label: '空白' }, { id: 'trace', label: '描紅(灰)' }, { id: 'solid', label: '範例(黑)' }].map(mode => (
+                                                <button key={mode.id} onClick={() => setTextMode(mode.id)} className={`flex-1 py-1.5 text-xs rounded transition-all ${textMode === mode.id ? 'bg-white text-[#5d4037] shadow-sm font-bold border border-[#d7ccc8]' : 'text-[#8d6e63] hover:bg-white/50'}`}>{mode.label}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h2 className="flex items-center gap-2 text-base font-bold text-[#5d4037] mb-3 border-b border-[#e0d6cc] pb-1"><Grid3X3 size={18} /> 田格樣式</h2>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[{ id: 'tian', label: '田字格' }, { id: 'mi', label: '米字格' }, { id: 'huigong', label: '回宮格' }, { id: 'jiugong', label: '九宮格' }, { id: 'none', label: '空白框' }].map((item) => (
+                                        <button key={item.id} onClick={() => setGridType(item.id)} className={`px-3 py-2 text-sm rounded border transition-all duration-200 text-left ${gridType === item.id ? 'bg-[#5d4037] text-white border-[#5d4037] shadow-sm' : 'bg-white border-[#d7ccc8] hover:border-[#a1887f] text-[#5d4037]'}`}>{item.label}</button>
+                                    ))}
+                                </div>
+                                <div className="mt-4">
+                                    <h3 className="text-xs font-semibold text-[#8d6e63] mb-2 flex items-center gap-2"><Palette size={14}/> 線條顏色</h3>
+                                    <div className="flex gap-2">
+                                        {Object.keys(colors).map((key) => (
+                                            <button key={key} onClick={() => setGridColor(key)} className={`flex-1 py-1.5 rounded border flex items-center justify-center gap-2 transition-all text-xs ${gridColor === key ? 'ring-1 ring-offset-1 ring-[#a1887f] font-bold bg-white' : 'opacity-70 hover:opacity-100 bg-transparent'}`} style={{ borderColor: colors[key].stroke, color: colors[key].stroke }}>
+                                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[key].stroke }}></div>{colors[key].name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h2 className="flex items-center gap-2 text-base font-bold text-[#5d4037] mb-3 border-b border-[#e0d6cc] pb-1"><Type size={18} /> 注音與拼音</h2>
+                                <div className="space-y-2">
+                                    {[{ id: 'none', label: '純文字格', sub: '' }, { id: 'zhuyin', label: '注音格', sub: '(右側)' }, { id: 'pinyin', label: '漢拼格', sub: '(上方)' }, { id: 'both', label: '雙拼格', sub: '(上+右)' }].map((type) => (
+                                        <button key={type.id} onClick={() => setPhoneticType(type.id)} className={`w-full px-3 py-2 rounded border text-left flex items-center justify-between transition-all ${phoneticType === type.id ? 'bg-[#5d4037] text-white border-[#5d4037]' : 'bg-white border-[#d7ccc8] text-[#5d4037]'}`}><span className="text-sm font-medium">{type.label} <span className="text-xs opacity-75">{type.sub}</span></span>{phoneticType === type.id && <div className="w-2 h-2 bg-white rounded-full"></div>}</button>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+
+                        <div className="p-4 bg-[#f5efe6] text-[#8d6e63] border-t border-[#d4c5b0] flex flex-col gap-1.5">
+                            <div className="text-xs flex items-center flex-wrap gap-3">
+                                <div className="flex items-center gap-1"><Info size={12} /><span>製作: AI練習曲</span></div>
+                                <span>Sophia Wong編修</span>
+                            </div>
+                            <div className="text-[10px] text-[#a1887f] bg-[#ehe5d9] rounded pt-1">歡迎分享，請勿商用</div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 bg-[#dcdcdc] relative flex flex-col h-full overflow-hidden">
+                        <div className="bg-[#fdfbf7] p-3 shadow-sm border-b border-[#d4c5b0] flex flex-wrap items-center justify-between gap-3 z-20">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5"><Settings2 size={16} className="text-[#8d6e63]" /><span className="font-bold text-[#5d4037] text-sm">設定：</span></div>
+                                <div className="flex items-center gap-2"><span className="text-xs text-[#5d4037]">直行(Rows):</span><input type="number" min="1" max="25" value={rows} onChange={(e) => setRows(Number(e.target.value))} className="w-12 text-center border border-[#8d6e63] rounded text-[#5d4037] text-sm py-0.5" /></div>
+                                <div className="flex items-center gap-2"><span className="text-xs text-[#5d4037]">橫列(Cols):</span><input type="number" min="1" max="15" value={cols} onChange={(e) => setCols(Number(e.target.value))} className="w-12 text-center border border-[#8d6e63] rounded text-[#5d4037] text-sm py-0.5" /></div>
+                            </div>
+                            <button id="export-btn" onClick={handleExportPdf} disabled={isGenerating} className={`flex items-center gap-2 px-4 py-1.5 rounded shadow-md transition-colors text-sm font-bold ${!isGenerating ? 'bg-[#8d6e63] hover:bg-[#6d4c41] text-white cursor-pointer' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
+                                <Download size={16} />{isGenerating ? "生成中..." : "匯出 PDF"}
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-auto p-4 flex justify-center items-start" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/cream-paper.png')" }}>
+                            <div ref={printRef} className="bg-white shadow-xl relative mx-auto box-border" style={{ width: '210mm', height: '297mm', padding: '15mm', backgroundImage: 'url("https://www.transparenttextures.com/patterns/rice-paper-2.png")', backgroundSize: '300px' }}>
+                                <div className="w-full h-full flex flex-col items-center justify-start">
+                                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, auto)`, gap: '0mm', justifyContent: 'center', alignContent: 'start', borderTop: colors[gridColor].border, borderLeft: colors[gridColor].border, width: 'fit-content' }}>
+                                        {Array.from({ length: rows * cols }).map((_, index) => {
+                                            const cleanText = inputText.replace(/[\n\r]/g, '');
+                                            const char = cleanText[index] || '';
+                                            return <div key={index} className="flex-shrink-0"><CellUnit size={cellSize} char={char} mode={textMode} /></div>;
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="absolute bottom-2 left-0 w-full text-center text-[9px] text-gray-400 font-sans opacity-50">Sophia Wong編修</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
