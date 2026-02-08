@@ -28,9 +28,15 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <style>
-        /* 全域字體設定 */
+        /* 全域介面字體設定 (設定與說明文字) */
         body, input, textarea, button, select { 
             font-family: "Noto Serif TC", serif; 
+        }
+
+        /* 習字帖練習字專用 (楷體) */
+        /* 優先順序：標準楷體 -> 標楷體(台) -> 標楷體(港/中) -> 全字庫楷體 -> 備用明體 */
+        .font-kaiti {
+            font-family: "KaiTi", "BiauKai", "DFKai-SB", "STKaiti", "Kaiti SC", "AR PL UKai TW", "AR PL UKai CN", "Noto Serif TC", serif;
         }
 
         /* 移除數字輸入框的上下箭頭 */
@@ -234,7 +240,8 @@
                         position: 'absolute', width: '100%', height: '100%',
                         textAlign: 'center', top: 0, left: 0, zIndex: 10, pointerEvents: 'none',
                     };
-                    return <span className="font-calligraphy" style={style}>{char}</span>;
+                    // Changed className to use font-kaiti for practice text
+                    return <span className="font-kaiti" style={style}>{char}</span>;
                 };
 
                 const GridBox = () => (
